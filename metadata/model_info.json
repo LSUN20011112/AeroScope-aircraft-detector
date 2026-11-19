@@ -1,0 +1,27 @@
+{
+  "product_name": "AeroScope",
+  "task": "remote-sensing aircraft detection",
+  "architecture": "YOLOv5x",
+  "bounding_box_type": "HBB",
+  "class_names": ["aircraft"],
+  "input_tile_size": 640,
+  "default_tile_overlap": 0.25,
+  "default_confidence_threshold": 0.25,
+  "default_within_tile_iou": 0.45,
+  "default_global_nms_iou": 0.40,
+  "training_pipeline": [
+    "COCO-pretrained YOLOv5x",
+    "HRPlanesv2 fine-tuning",
+    "CORS-ADD-HBB transfer learning"
+  ],
+  "checkpoint": {
+    "filename": "stage2_cors_add_hbb_best.pt",
+    "size_bytes": 173117747,
+    "sha256": "30f995545854aa13496adc67a9731b560c29ac57acc10f865e50ee5098b188fe"
+  },
+  "held_out_test_metrics": {
+    "HRPlanesv2": {"images": 210, "precision": 0.988, "recall": 0.984, "map50": 0.991, "map50_95": 0.796},
+    "CORS-ADD-HBB": {"images": 1722, "precision": 0.946, "recall": 0.905, "map50": 0.937, "map50_95": 0.534}
+  },
+  "yolov5_commit": "cb2f17fd5d790cfdd0c07c25351904df9affbe6e"
+}
