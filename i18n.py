@@ -13,7 +13,7 @@ TEXT = {
         "setup_hint": "请在 Streamlit Secrets 中配置 `MODEL_URL`，或在本地 models/ 文件夹放入最终权重。",
         "runtime_download": "运行资源已配置；首次检测时会自动下载并校验最终模型",
         "input_heading": "选择影像",
-        "upload": "上传 JPG、JPEG 或 PNG 遥感影像",
+        "upload": "上传 JPG、JPEG、PNG、TIF 或 TIFF 遥感影像",
         "use_demo": "使用 Houston Hobby Airport 示例影像",
         "no_image": "请上传一张影像，或选择 Houston 示例。",
         "image_info": "影像尺寸：{width} × {height} 像素",
@@ -58,7 +58,7 @@ TEXT = {
         "inference_text": "大幅遥感影像先被划分为相互重叠的图块。YOLOv5x 分别处理每个图块，局部检测框随后映射回原始影像坐标。Global NMS 最后合并相邻图块产生的重复框。",
         "metrics_note": "以下结果来自严格保留的测试集，不是 validation 指标。",
         "limitations": "局限性与使用范围",
-        "limitations_text": "本系统仅输出水平边界框（HBB）。对训练分布之外的地区、传感器、空间分辨率或极端成像条件，结果可能出现误检或漏检。Houston 示例没有完整人工真值，因此仅作为定性外部验证。",
+        "limitations_text": "本系统仅输出水平边界框（HBB）。支持常见 RGB、灰度和 16 位 TIFF；高位深影像会转换为三通道 RGB，GeoTIFF 坐标系元数据不会保留。对训练分布之外的地区、传感器、空间分辨率或极端成像条件，结果可能出现误检或漏检。Houston 示例没有完整人工真值，因此仅作为定性外部验证。",
         "privacy": "上传的影像仅在当前本地 Streamlit 进程中用于推理，本应用不会主动上传到外部服务。",
         "step_coco": "COCO 预训练 YOLOv5x",
         "step_hr": "HRPlanesv2 微调",
@@ -80,7 +80,7 @@ TEXT = {
         "setup_hint": "Configure `MODEL_URL` in Streamlit Secrets, or place the final checkpoint in the local models/ folder.",
         "runtime_download": "Runtime assets are configured; the final model will be downloaded and verified on first use",
         "input_heading": "Choose an image",
-        "upload": "Upload a JPG, JPEG, or PNG remote-sensing image",
+        "upload": "Upload a JPG, JPEG, PNG, TIF, or TIFF remote-sensing image",
         "use_demo": "Use the Houston Hobby Airport example",
         "no_image": "Upload an image or select the Houston example.",
         "image_info": "Image size: {width} × {height} pixels",
@@ -125,7 +125,7 @@ TEXT = {
         "inference_text": "Large remote-sensing images are divided into overlapping tiles. YOLOv5x processes every tile, and local boxes are mapped back to full-image coordinates. Global NMS then merges duplicate boxes created by neighboring tiles.",
         "metrics_note": "These results come from strictly held-out test sets, not validation metrics.",
         "limitations": "Scope and limitations",
-        "limitations_text": "The system returns horizontal bounding boxes (HBB) only. False positives or missed detections may occur for locations, sensors, spatial resolutions, or imaging conditions outside the training distribution. The Houston example has no complete manual ground truth and is therefore a qualitative external validation only.",
+        "limitations_text": "The system returns horizontal bounding boxes (HBB) only. Common RGB, grayscale, and 16-bit TIFF files are supported; high-bit-depth imagery is converted to three-channel RGB, and GeoTIFF coordinate metadata is not retained. False positives or missed detections may occur for locations, sensors, spatial resolutions, or imaging conditions outside the training distribution. The Houston example has no complete manual ground truth and is therefore a qualitative external validation only.",
         "privacy": "Uploaded images are processed only by the current local Streamlit process. This app does not intentionally upload them to an external service.",
         "step_coco": "COCO-pretrained YOLOv5x",
         "step_hr": "HRPlanesv2 fine-tuning",
@@ -144,3 +144,4 @@ def tr(language: str, key: str, **kwargs):
     if isinstance(value, str) and kwargs:
         return value.format(**kwargs)
     return value
+
