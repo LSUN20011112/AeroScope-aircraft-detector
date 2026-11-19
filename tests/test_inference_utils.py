@@ -1,13 +1,46 @@
 import unittest
+from io import BytesIO
 
 import numpy as np
 import pandas as pd
 from PIL import Image
 
-from inference import apply_global_nms, axis_positions, generate_tiles, numpy_nms
+from inference import (
+    apply_global_nms,
+    axis_positions,
+    decode_image_bytes,
+    generate_tiles,
+    numpy_nms,
+)
 
 
 class InferenceUtilityTests(unittest.TestCase):
+    def test_decode_rgb_tiff(self):
+        source = Image.new("RGB", (24, 16), (12, 34, 56))
+        buffer = BytesIO()
+        source.save(buffer, format="TIFF")
+
+        decoded = decode_image_bytes(buffer.getvalue(), "rgb.tif")
+
+        self.assertEqual(decoded.mode, "RGB")
+        self.assertEqual(decoded.size, (24, 16))
+        self.assertEqual(decoded.getpixel((0, 0)), (12, 34, 56))
+
+    def test_decode_16bit_grayscale_tiff(self):
+        source_array = np.linspace(0, 65535, 32 * 20, dtype=np.uint16).reshape(20, 32)
+        source = Image.fromarray(source_array)
+        buffer = BytesIO()
+        source.save(buffer, format="TIFF")
+
+        decoded = decode_image_bytes(buffer.getvalue(), "gray16.tiff")
+        decoded_array = np.asarray(decoded)
+
+        self.assertEqual(decoded.mode, "RGB")
+        self.assertEqual(decoded.size, (32, 20))
+        self.assertEqual(decoded_array.dtype, np.uint8)
+        self.assertGreater(int(decoded_array.max()), int(decoded_array.min()))
+        self.assertTrue(np.array_equal(decoded_array[..., 0], decoded_array[..., 1]))
+
     def test_axis_positions_covers_far_edge(self):
         self.assertEqual(axis_positions(3000, 640, 480), [0, 480, 960, 1440, 1920, 2360])
 
@@ -42,3 +75,4 @@ class InferenceUtilityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
