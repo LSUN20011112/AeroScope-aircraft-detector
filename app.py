@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import hashlib
-from io import BytesIO
 import json
 from pathlib import Path
 
 import pandas as pd
-from PIL import Image
 import streamlit as st
 
 from i18n import tr
 from inference import (
     dataframe_to_csv_bytes,
+    decode_image_bytes,
     detect_aircraft,
     image_to_jpeg_bytes,
     load_yolov5_model,
@@ -110,7 +109,10 @@ def hero(language: str, guide: bool = False) -> None:
 def load_selected_image(language: str):
     st.subheader(tr(language, "input_heading"))
     use_demo = st.checkbox(tr(language, "use_demo"), value=True)
-    uploaded = st.file_uploader(tr(language, "upload"), type=["jpg", "jpeg", "png"])
+    uploaded = st.file_uploader(
+        tr(language, "upload"),
+        type=["jpg", "jpeg", "png", "tif", "tiff"],
+    )
 
     if uploaded is not None:
         image_bytes = uploaded.getvalue()
@@ -121,7 +123,7 @@ def load_selected_image(language: str):
     else:
         return None, None, None
 
-    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    image = decode_image_bytes(image_bytes, filename)
     fingerprint = hashlib.sha256(image_bytes).hexdigest()
     st.caption(tr(language, "image_info", width=image.width, height=image.height))
     return image, filename, fingerprint
@@ -362,3 +364,4 @@ if page == "detect":
     detection_page(language)
 else:
     guide_page(language)
+
