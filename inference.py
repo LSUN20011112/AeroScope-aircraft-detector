@@ -9,6 +9,7 @@ import pathlib
 from pathlib import Path
 import sys
 import time
+import types
 from typing import Callable, Iterable
 
 import numpy as np
@@ -38,6 +39,81 @@ class DetectionOutput:
     annotated_image: Image.Image
     tile_count: int
     elapsed_seconds: float
+
+
+def _channel_to_uint8(channel: np.ndarray) -> np.ndarray:
+    """Convert an integer/float image channel to display-ready uint8."""
+    channel = np.asarray(channel)
+    if channel.dtype == np.uint8:
+        return channel
+    if channel.dtype == np.bool_:
+        return channel.astype(np.uint8) * 255
+
+    values = channel.astype(np.float64, copy=False)
+    finite = np.isfinite(values)
+    if not finite.any():
+        return np.zeros(values.shape, dtype=np.uint8)
+
+    valid = values[finite]
+    low, high = np.percentile(valid, (2.0, 98.0))
+    if high <= low:
+        fill = float(np.clip(valid[0], 0.0, 255.0))
+        return np.full(values.shape, round(fill), dtype=np.uint8)
+
+    scaled = (values - low) * (255.0 / (high - low))
+    scaled[~finite] = 0.0
+    return np.clip(scaled, 0.0, 255.0).astype(np.uint8)
+
+
+def decode_image_bytes(image_bytes: bytes, filename: str = "uploaded image") -> Image.Image:
+    """Decode JPG/PNG/TIFF bytes and return a three-channel RGB image.
+
+    High-bit-depth grayscale and RGB TIFF channels are contrast-stretched from
+    their 2nd to 98th percentiles. The first frame/page is used for multi-page
+    TIFF files. Raster georeferencing metadata is not retained.
+    """
+    try:
+        with Image.open(BytesIO(image_bytes)) as source:
+            if getattr(source, "n_frames", 1) > 1:
+                source.seek(0)
+            source.load()
+            array = np.asarray(source)
+
+            if array.dtype == np.uint8 and source.mode in {"RGB", "RGBA"}:
+                return source.convert("RGB").copy()
+            if array.dtype == np.uint8 and source.mode not in {"I", "F", "I;16"}:
+                return source.convert("RGB").copy()
+    except Exception as exc:
+        raise ValueError(f"Unable to decode {filename}: {exc}") from exc
+
+    if array.ndim == 2:
+        gray = _channel_to_uint8(array)
+        rgb = np.repeat(gray[:, :, None], 3, axis=2)
+    elif array.ndim == 3:
+        # Pillow normally returns HWC. The second branch also accommodates
+        # uncommon channel-first arrays produced by some TIFF encoders.
+        if array.shape[-1] in {1, 2, 3, 4}:
+            channels = array[..., : min(3, array.shape[-1])]
+        elif array.shape[0] in {1, 2, 3, 4}:
+            channels = np.moveaxis(array[: min(3, array.shape[0])], 0, -1)
+        else:
+            raise ValueError(
+                f"Unable to decode {filename}: unsupported TIFF band layout {array.shape}."
+            )
+        if channels.shape[-1] == 1:
+            channels = np.repeat(channels, 3, axis=-1)
+        elif channels.shape[-1] == 2:
+            channels = np.repeat(channels[..., :1], 3, axis=-1)
+        rgb = np.stack(
+            [_channel_to_uint8(channels[..., index]) for index in range(3)],
+            axis=-1,
+        )
+    else:
+        raise ValueError(
+            f"Unable to decode {filename}: unsupported image dimensions {array.shape}."
+        )
+
+    return Image.fromarray(rgb)
 
 
 def axis_positions(length: int, tile_size: int, stride: int) -> list[int]:
@@ -152,23 +228,40 @@ def load_yolov5_model(weights_path: Path, yolov5_root: Path, device: str = "cpu"
     root_string = str(yolov5_root.resolve())
     if root_string not in sys.path:
         sys.path.insert(0, root_string)
-    # The checkpoint was produced in Linux/Colab and contains serialized
-    # pathlib.PosixPath objects. Map those paths to WindowsPath only while
-    # unpickling so the original checkpoint remains byte-for-byte unchanged.
+    # The checkpoint was produced by Python 3.13 in Linux/Colab, where concrete
+    # pathlib classes are serialized from ``pathlib._local``. Python 3.12 has
+    # no such submodule, while Windows cannot instantiate PosixPath. Install a
+    # temporary compatibility module/class mapping only during unpickling.
     original_posix_path = pathlib.PosixPath
-    pathlib_local = None
-    original_local_posix_path = None
+    original_pure_posix_path = pathlib.PurePosixPath
+    existing_local_module = sys.modules.get("pathlib._local")
+    created_local_shim = existing_local_module is None
+    had_local_attribute = hasattr(pathlib, "_local")
+
+    if created_local_shim:
+        pathlib_local = types.ModuleType("pathlib._local")
+        pathlib_local.Path = pathlib.Path
+        pathlib_local.PurePath = pathlib.PurePath
+        pathlib_local.WindowsPath = pathlib.WindowsPath
+        pathlib_local.PureWindowsPath = pathlib.PureWindowsPath
+        pathlib_local.PosixPath = (
+            pathlib.WindowsPath if os.name == "nt" else pathlib.PosixPath
+        )
+        pathlib_local.PurePosixPath = (
+            pathlib.PureWindowsPath if os.name == "nt" else pathlib.PurePosixPath
+        )
+        sys.modules["pathlib._local"] = pathlib_local
+        setattr(pathlib, "_local", pathlib_local)
+    else:
+        pathlib_local = existing_local_module
+
+    original_local_posix_path = getattr(pathlib_local, "PosixPath", None)
+    original_local_pure_posix_path = getattr(pathlib_local, "PurePosixPath", None)
     if os.name == "nt":
         pathlib.PosixPath = pathlib.WindowsPath
-        # Python 3.13 moved the concrete classes to pathlib._local, and
-        # checkpoints created there pickle that internal module path.
-        try:
-            import pathlib._local as pathlib_local
-
-            original_local_posix_path = pathlib_local.PosixPath
-            pathlib_local.PosixPath = pathlib_local.WindowsPath
-        except ImportError:
-            pathlib_local = None
+        pathlib.PurePosixPath = pathlib.PureWindowsPath
+        pathlib_local.PosixPath = pathlib.WindowsPath
+        pathlib_local.PurePosixPath = pathlib.PureWindowsPath
     try:
         model = torch.hub.load(
             root_string,
@@ -181,8 +274,15 @@ def load_yolov5_model(weights_path: Path, yolov5_root: Path, device: str = "cpu"
         )
     finally:
         pathlib.PosixPath = original_posix_path
-        if pathlib_local is not None and original_local_posix_path is not None:
+        pathlib.PurePosixPath = original_pure_posix_path
+        if created_local_shim:
+            if sys.modules.get("pathlib._local") is pathlib_local:
+                del sys.modules["pathlib._local"]
+            if not had_local_attribute and getattr(pathlib, "_local", None) is pathlib_local:
+                delattr(pathlib, "_local")
+        else:
             pathlib_local.PosixPath = original_local_posix_path
+            pathlib_local.PurePosixPath = original_local_pure_posix_path
     model.eval()
     return model
 
@@ -296,3 +396,4 @@ def image_to_jpeg_bytes(image: Image.Image, quality: int = 95) -> bytes:
 
 def dataframe_to_csv_bytes(frame: pd.DataFrame) -> bytes:
     return frame.to_csv(index=False).encode("utf-8-sig")
+
