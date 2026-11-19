@@ -7,7 +7,9 @@ A bilingual Streamlit application that uses the final Stage-2 YOLOv5x checkpoint
 ## Features
 
 - Switch the complete interface between Chinese and English.
-- Upload JPG, JPEG, or PNG remote-sensing images.
+- Upload JPG, JPEG, PNG, TIF, or TIFF remote-sensing images. Common RGB,
+  grayscale, and 16-bit TIFF pixels are converted to three-channel RGB for
+  inference; GeoTIFF coordinate metadata is not retained in the output.
 - Use the included Houston Hobby Airport image as a demonstration.
 - Divide large images into overlapping tiles for inference.
 - Map tile detections back to full-image coordinates.
@@ -148,3 +150,4 @@ python -m unittest discover -s tests -v
 ## Important limitations
 
 This is an academic demonstration, not a certified aviation, mapping, or surveillance system. Predictions may include false positives or false negatives, especially for imagery outside the training distribution. Review `MODEL_CARD.md` and `THIRD_PARTY_NOTICES.md` before public or commercial deployment.
+
